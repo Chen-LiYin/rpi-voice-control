@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>智慧家居控制</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🏠 智慧家居控制</h1>
+      </header>
+
+      <!-- 語音控制區塊 -->
+      <section class="voice-control">
+        <h2>🎤 語音控制</h2>
+        <div class="input-group">
+          <input
+            type="text"
+            id="voiceCommand"
+            placeholder="輸入指令，例如 'turn on the light' 或 'set brightness to 75%'"
+            class="voice-input"
+          />
+          <button id="sendCommand" class="btn-send">發送</button>
+        </div>
+
+        <div class="quick-commands">
+          <button class="quick-btn" data-command="Turn on the light">
+            開燈
+          </button>
+          <button class="quick-btn" data-command="Set brightness to 50%">
+            亮度 50%
+          </button>
+          <button class="quick-btn" data-command="Turn off the light">
+            關燈
+          </button>
+          <button class="quick-btn" data-command="Rotate servo to center">
+            伺服馬達置中
+          </button>
+          <button class="quick-btn" data-command="Move servo left">
+            向左轉
+          </button>
+          <button class="quick-btn" data-command="Move servo right">
+            向右轉
+          </button>
+        </div>
+
+        <div id="llmResponse" class="response-box" style="display: none">
+          <strong>回應：</strong> <span id="responseText"></span>
+        </div>
+      </section>
+
+      <!-- 手動控制區塊 -->
+      <div class="controls-grid">
+        <!-- LED 控制 -->
+        <section class="control-card led-card">
+          <h2>💡 LED 亮度控制</h2>
+          <div class="visual-display">
+            <div id="ledBulb" class="led-bulb"></div>
+            <div class="value-display"><span id="ledValue">0</span>%</div>
+          </div>
+          <div class="slider-container">
+            <input
+              type="range"
+              id="ledSlider"
+              min="0"
+              max="100"
+              value="0"
+              class="slider led-slider"
+            />
+          </div>
+          <div class="button-group">
+            <button class="control-btn" data-led="0">關閉</button>
+            <button class="control-btn" data-led="50">50%</button>
+            <button class="control-btn" data-led="100">最大</button>
+          </div>
+        </section>
+
+        <!-- 伺服馬達控制 -->
+        <section class="control-card servo-card">
+          <h2>🔄 伺服馬達角度</h2>
+          <div class="visual-display">
+            <div class="servo-display">
+              <div class="servo-circle">
+                <div id="servoArm" class="servo-arm"></div>
+              </div>
+            </div>
+            <div class="value-display"><span id="servoValue">0</span>°</div>
+          </div>
+          <div class="slider-container">
+            <input
+              type="range"
+              id="servoSlider"
+              min="-90"
+              max="90"
+              value="0"
+              class="slider servo-slider"
+            />
+          </div>
+          <div class="button-group">
+            <button class="control-btn" data-servo="-90">-90°</button>
+            <button class="control-btn" data-servo="0">中心</button>
+            <button class="control-btn" data-servo="90">+90°</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- 狀態指示 -->
+      <div class="status-bar">
+        <span id="connectionStatus" class="status-indicator"
+          >● 連線狀態：<span id="statusText">連線中...</span></span
+        >
+      </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
