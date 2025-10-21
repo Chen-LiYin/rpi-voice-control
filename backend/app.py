@@ -3,7 +3,6 @@ from flask_cors import CORS
 from gpiozero import LED, Servo
 from gpiozero.pins.pigpio import PiGPIOFactory
 import subprocess
-import requests
 import json
 import re
 import threading
@@ -51,42 +50,8 @@ def text_to_speech(text):
     thread.daemon = True
     thread.start()
 
-def parse_command_with_ollama(user_input):
-    """使用 Ollama API 解析指令"""
-    try:
-        response = requests.post('http://localhost:11434/api/generate', 
-            json={
-                'model': 'tinyllama',
-                'prompt': f'''Parse this smart home command and respond with JSON only:
-Command: "{user_input}"
-
-Response format:
-{{"action": "set_led" or "set_servo" or "set_both" or "unknown", "led_brightness": 0-100 or null, "servo_angle": -90 to 90 or null, "response": "confirmation message"}}
-
-Examples:
-"turn on the light" -> {{"action": "set_led", "led_brightness": 100, "servo_angle": null, "response": "Turning LED on"}}
-"brightness 50" -> {{"action": "set_led", "led_brightness": 50, "servo_angle": null, "response": "Setting brightness to 50%"}}
-"servo center" -> {{"action": "set_servo", "led_brightness": null, "servo_angle": 0, "response": "Moving servo to center"}}
-
-JSON only:''',
-                'stream': False
-            },
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            result_text = response.json()['response']
-            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-    except Exception as e:
-        print(f"Ollama 錯誤：{e}")
-    
-    # 如果 Ollama 失敗，使用規則引擎
-    return parse_command_with_rules(user_input)
-
 def parse_command_with_rules(user_input):
-    """簡單的規則引擎解析指令（備用方案）"""
+    """簡單的規則引擎解析指令"""
     user_input = user_input.lower()
     
     # LED 控制
@@ -110,7 +75,14 @@ def parse_command_with_rules(user_input):
                 "action": "set_led",
                 "led_brightness": 30,
                 "servo_angle": None,
-                "response": "Dimming LED to 30%"
+                "response": "Dimming LED to 30 percent"
+            }
+        elif 'half' in user_input or 'medium' in user_input:
+            return {
+                "action": "set_led",
+                "led_brightness": 50,
+                "servo_angle": None,
+                "response": "Setting LED to 50 percent"
             }
         else:
             # 尋找數字
@@ -122,11 +94,11 @@ def parse_command_with_rules(user_input):
                     "action": "set_led",
                     "led_brightness": brightness,
                     "servo_angle": None,
-                    "response": f"Setting LED brightness to {brightness}%"
+                    "response": f"Setting LED brightness to {brightness} percent"
                 }
     
     # 伺服馬達控制
-    if 'servo' in user_input or 'rotate' in user_input or 'move' in user_input:
+    if 'servo' in user_input or 'rotate' in user_input or 'move' in user_input or 'turn' in user_input:
         if 'left' in user_input:
             return {
                 "action": "set_servo",
@@ -141,13 +113,28 @@ def parse_command_with_rules(user_input):
                 "servo_angle": 45,
                 "response": "Moving servo right"
             }
-        elif 'center' in user_input or 'middle' in user_input:
+        elif 'center' in user_input or 'middle' in user_input or 'centre' in user_input:
             return {
                 "action": "set_servo",
                 "led_brightness": None,
                 "servo_angle": 0,
                 "response": "Moving servo to center"
             }
+        elif 'max' in user_input or 'maximum' in user_input:
+            if 'left' in user_input:
+                return {
+                    "action": "set_servo",
+                    "led_brightness": None,
+                    "servo_angle": -90,
+                    "response": "Moving servo to maximum left"
+                }
+            else:
+                return {
+                    "action": "set_servo",
+                    "led_brightness": None,
+                    "servo_angle": 90,
+                    "response": "Moving servo to maximum right"
+                }
         else:
             # 尋找角度
             numbers = re.findall(r'-?\d+', user_input)
@@ -167,14 +154,31 @@ def parse_command_with_rules(user_input):
             "action": "set_both",
             "led_brightness": 50,
             "servo_angle": 0,
-            "response": "Setting LED to 50% and centering servo"
+            "response": "Setting LED to 50 percent and centering servo"
         }
+    
+    # 全部開啟/關閉
+    if 'everything' in user_input or 'all' in user_input:
+        if 'off' in user_input:
+            return {
+                "action": "set_both",
+                "led_brightness": 0,
+                "servo_angle": 0,
+                "response": "Turning everything off"
+            }
+        elif 'on' in user_input or 'max' in user_input:
+            return {
+                "action": "set_both",
+                "led_brightness": 100,
+                "servo_angle": 0,
+                "response": "Turning everything on"
+            }
     
     return {
         "action": "unknown",
         "led_brightness": None,
         "servo_angle": None,
-        "response": "I didn't understand that command. Try 'turn on the light' or 'move servo left'"
+        "response": "I didn't understand that command. Try turn on the light or move servo left"
     }
 
 # REST API 端點
@@ -197,11 +201,12 @@ def voice_command():
     data = request.json
     user_input = data.get('command', '')
     
-    # 嘗試使用 Ollama，如果失敗則使用規則引擎
-    try:
-        result = parse_command_with_ollama(user_input)
-    except:
-        result = parse_command_with_rules(user_input)
+    print(f"收到指令: {user_input}")
+    
+    # 使用規則引擎解析
+    result = parse_command_with_rules(user_input)
+    
+    print(f"解析結果: {result}")
     
     # 執行動作
     if result['led_brightness'] is not None:
@@ -219,6 +224,15 @@ def voice_command():
 def get_state():
     return jsonify(current_state)
 
+@app.route('/api/test', methods=['GET'])
+def test():
+    """測試端點"""
+    return jsonify({
+        'status': 'ok',
+        'message': 'Backend is running',
+        'current_state': current_state
+    })
+
 # 清理
 @app.route('/api/shutdown', methods=['POST'])
 def shutdown():
@@ -228,14 +242,27 @@ def shutdown():
 
 if __name__ == '__main__':
     try:
-        print("=" * 50)
-        print("啟動智慧家居控制器...")
-        print(f"LED：GPIO 18")
-        print(f"伺服馬達：GPIO 12")
-        print("規則引擎已就緒（Ollama 可選）")
-        print("=" * 50)
+        print("=" * 60)
+        print("🏠 智慧家居控制器啟動中...")
+        print("=" * 60)
+        print(f"💡 LED：GPIO 18")
+        print(f"🔄 伺服馬達：GPIO 12")
+        print(f"🤖 使用規則引擎進行語音指令解析")
+        print(f"🌐 Web 介面：http://localhost:5000")
+        print("=" * 60)
+        print("\n支援的語音指令範例：")
+        print("  - Turn on the light")
+        print("  - Set brightness to 75")
+        print("  - Dim the light")
+        print("  - Move servo left")
+        print("  - Rotate servo to 45 degrees")
+        print("  - Servo center")
+        print("=" * 60)
+        print("\n按 Ctrl+C 停止伺服器\n")
+        
         app.run(host='0.0.0.0', port=5000, debug=True)
     except KeyboardInterrupt:
-        print("\n正在關閉...")
+        print("\n\n正在關閉...")
         led.close()
         servo.close()
+        print("已清理 GPIO")

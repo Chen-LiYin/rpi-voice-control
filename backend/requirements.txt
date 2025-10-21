@@ -1,7 +1,4 @@
 Flask==2.3.0
 flask-cors==4.0.0
-flask-socketio==5.3.0
-python-socketio==5.9.0
-gpiozero==2.0
-pigpio==1.78
-requests==2.28.0
+importlib-metadata==4.13.0
+gpiozero==1.6.2
