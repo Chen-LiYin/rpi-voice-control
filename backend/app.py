@@ -21,6 +21,8 @@ current_state = {
     'servo_angle': 0
 }
 
+CORS(app)
+
 def set_led_brightness(brightness):
     """設定 LED 亮度（0-100）"""
     brightness = max(0, min(100, brightness))
