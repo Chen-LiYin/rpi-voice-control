@@ -15,11 +15,25 @@
       <!-- 語音控制區塊 -->
       <section class="voice-control">
         <h2>🎤 語音控制</h2>
+
+        <!-- 語音輸入按鈕 -->
+        <div class="voice-input-section">
+          <button id="micButton" class="mic-button">
+            <span class="mic-icon">🎤</span>
+            <span class="mic-text">按住說話</span>
+          </button>
+          <div id="listeningIndicator" class="listening-indicator">
+            <span class="pulse"></span>
+            <span>正在聆聽...</span>
+          </div>
+        </div>
+
+        <!-- 文字輸入 -->
         <div class="input-group">
           <input
             type="text"
             id="voiceCommand"
-            placeholder="輸入指令，例如 'turn on the light' 或 'set brightness to 75%'"
+            placeholder="輸入指令，例如 'turn on the light' 或按住上方麥克風說話"
             class="voice-input"
           />
           <button id="sendCommand" class="btn-send">發送</button>
@@ -29,7 +43,7 @@
           <button class="quick-btn" data-command="Turn on the light">
             開燈
           </button>
-          <button class="quick-btn" data-command="Set brightness to 50%">
+          <button class="quick-btn" data-command="Set brightness to 50">
             亮度 50%
           </button>
           <button class="quick-btn" data-command="Turn off the light">
@@ -114,7 +128,6 @@
       </div>
     </div>
 
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

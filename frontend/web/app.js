@@ -1,6 +1,5 @@
 // API 設定
 const API_URL = 'http://localhost:5000';
-const socket = io(API_URL);
 
 // DOM 元素
 const ledSlider = document.getElementById('ledSlider');
@@ -16,6 +15,9 @@ const sendButton = document.getElementById('sendCommand');
 const responseBox = document.getElementById('llmResponse');
 const responseText = document.getElementById('responseText');
 
+const micButton = document.getElementById('micButton');
+const listeningIndicator = document.getElementById('listeningIndicator');
+
 const statusText = document.getElementById('statusText');
 const connectionStatus = document.getElementById('connectionStatus');
 
@@ -23,13 +25,97 @@ const connectionStatus = document.getElementById('connectionStatus');
 let currentLedBrightness = 0;
 let currentServoAngle = 0;
 
+// ========== 語音辨識設置 ==========
+let recognition = null;
+let isListening = false;
+
+// 檢查瀏覽器是否支援語音辨識
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US'; // 英文辨識
+
+  recognition.onstart = () => {
+    isListening = true;
+    micButton.classList.add('listening');
+    listeningIndicator.classList.add('active');
+    console.log('開始語音辨識...');
+  };
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    console.log('辨識結果:', transcript);
+    voiceInput.value = transcript;
+    sendVoiceCommand(transcript);
+  };
+
+  recognition.onerror = (event) => {
+    console.error('語音辨識錯誤:', event.error);
+    isListening = false;
+    micButton.classList.remove('listening');
+    listeningIndicator.classList.remove('active');
+
+    if (event.error === 'no-speech') {
+      alert('沒有偵測到語音，請再試一次');
+    } else if (event.error === 'not-allowed') {
+      alert('請允許使用麥克風權限');
+    }
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    micButton.classList.remove('listening');
+    listeningIndicator.classList.remove('active');
+    console.log('語音辨識結束');
+  };
+} else {
+  // 瀏覽器不支援語音辨識
+  const voiceControl = document.querySelector('.voice-control');
+  const warning = document.createElement('div');
+  warning.className = 'not-supported';
+  warning.innerHTML =
+    '⚠️ 您的瀏覽器不支援語音辨識功能，請使用 Chrome 或 Edge 瀏覽器';
+  voiceControl.insertBefore(warning, voiceControl.firstChild);
+  micButton.disabled = true;
+  micButton.style.opacity = '0.5';
+}
+
+// 麥克風按鈕事件
+micButton.addEventListener('mousedown', () => {
+  if (recognition && !isListening) {
+    recognition.start();
+  }
+});
+
+micButton.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (recognition && !isListening) {
+    recognition.start();
+  }
+});
+
+// 也可以點擊切換
+micButton.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (recognition) {
+    if (isListening) {
+      recognition.stop();
+    } else {
+      recognition.start();
+    }
+  }
+});
+
 // ========== LED 控制 ==========
 function updateLED(brightness) {
   currentLedBrightness = brightness;
   ledValue.textContent = brightness;
   ledSlider.value = brightness;
 
-  // 更新 LED 視覺效果
   ledBulb.style.opacity = brightness / 100;
   if (brightness > 0) {
     ledBulb.classList.add('active');
@@ -61,7 +147,6 @@ ledSlider.addEventListener('input', (e) => {
   setLED(brightness);
 });
 
-// LED 快速按鈕
 document.querySelectorAll('[data-led]').forEach((button) => {
   button.addEventListener('click', () => {
     const brightness = parseInt(button.dataset.led);
@@ -75,8 +160,6 @@ function updateServo(angle) {
   currentServoAngle = angle;
   servoValue.textContent = angle;
   servoSlider.value = angle;
-
-  // 更新伺服馬達視覺效果
   servoArm.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
 }
 
@@ -103,7 +186,6 @@ servoSlider.addEventListener('input', (e) => {
   setServo(angle);
 });
 
-// 伺服馬達快速按鈕
 document.querySelectorAll('[data-servo]').forEach((button) => {
   button.addEventListener('click', () => {
     const angle = parseInt(button.dataset.servo);
@@ -134,6 +216,13 @@ async function sendVoiceCommand(command) {
 
     const data = await response.json();
     responseText.textContent = data.response || '指令已執行';
+
+    if (data.led_brightness !== null) {
+      updateLED(data.led_brightness);
+    }
+    if (data.servo_angle !== null) {
+      updateServo(data.servo_angle);
+    }
   } catch (error) {
     console.error('語音指令錯誤:', error);
     responseText.textContent = '處理指令時發生錯誤，請稍後再試';
@@ -154,34 +243,12 @@ voiceInput.addEventListener('keypress', (e) => {
   }
 });
 
-// 快速指令按鈕
 document.querySelectorAll('.quick-btn').forEach((button) => {
   button.addEventListener('click', () => {
     const command = button.dataset.command;
     voiceInput.value = command;
     sendVoiceCommand(command);
   });
-});
-
-// ========== WebSocket 連線 ==========
-socket.on('connect', () => {
-  console.log('WebSocket 已連線');
-  statusText.textContent = '已連線';
-  connectionStatus.classList.add('connected');
-  connectionStatus.classList.remove('disconnected');
-});
-
-socket.on('disconnect', () => {
-  console.log('WebSocket 已斷線');
-  statusText.textContent = '已斷線';
-  connectionStatus.classList.add('disconnected');
-  connectionStatus.classList.remove('connected');
-});
-
-socket.on('state_update', (data) => {
-  console.log('狀態更新:', data);
-  updateLED(data.led_brightness);
-  updateServo(data.servo_angle);
 });
 
 // ========== 初始化 ==========
@@ -191,7 +258,8 @@ async function initializeState() {
     const data = await response.json();
     updateLED(data.led_brightness);
     updateServo(data.servo_angle);
-    console.log('初始狀態載入完成');
+    statusText.textContent = '已連線';
+    connectionStatus.classList.add('connected');
   } catch (error) {
     console.error('無法載入初始狀態:', error);
     statusText.textContent = '後端未就緒';
@@ -199,5 +267,5 @@ async function initializeState() {
   }
 }
 
-// 頁面載入時初始化
 window.addEventListener('load', initializeState);
+setInterval(initializeState, 2000);
