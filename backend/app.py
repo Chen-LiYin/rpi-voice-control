@@ -13,7 +13,7 @@ CORS(app)
 # GPIO 設置使用 pigpio
 factory = PiGPIOFactory()
 led = LED(18, pin_factory=factory)
-servo = Servo(12, pin_factory=factory)
+servo = Servo(12, pin_factory=factory, min_pulse_width=0.5/1000, max_pulse_width=2.5/1000)
 
 # 狀態管理
 current_state = {
