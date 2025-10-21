@@ -1,16 +1,15 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
 from gpiozero import LED, Servo
 from gpiozero.pins.pigpio import PiGPIOFactory
 import subprocess
 import requests
 import json
 import re
+import threading
 
 app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
 
 # GPIO 設置使用 pigpio
 factory = PiGPIOFactory()
@@ -28,7 +27,6 @@ def set_led_brightness(brightness):
     brightness = max(0, min(100, brightness))
     led.value = brightness / 100.0
     current_state['led_brightness'] = brightness
-    socketio.emit('state_update', current_state)
     return brightness
 
 def set_servo_angle(angle):
@@ -36,18 +34,22 @@ def set_servo_angle(angle):
     angle = max(-90, min(90, angle))
     servo.value = angle / 90.0
     current_state['servo_angle'] = angle
-    socketio.emit('state_update', current_state)
     return angle
 
 def text_to_speech(text):
-    """使用 espeak 將文字轉換為語音"""
-    try:
-        # 使用 espeak（支援中英文）
-        subprocess.run(['espeak', text], check=True)
-        return True
-    except Exception as e:
-        print(f"TTS 錯誤：{e}")
-        return False
+    """使用 espeak 將文字轉換為語音（背景執行）"""
+    def speak():
+        try:
+            subprocess.run(['espeak', text], check=True, 
+                         stdout=subprocess.DEVNULL, 
+                         stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"TTS 錯誤：{e}")
+    
+    # 在背景執行，不阻塞主程序
+    thread = threading.Thread(target=speak)
+    thread.daemon = True
+    thread.start()
 
 def parse_command_with_ollama(user_input):
     """使用 Ollama API 解析指令"""
@@ -209,31 +211,13 @@ def voice_command():
         set_servo_angle(result['servo_angle'])
     
     # 語音回應（背景執行，不阻塞）
-    try:
-        text_to_speech(result['response'])
-    except:
-        pass
+    text_to_speech(result['response'])
     
     return jsonify(result)
 
 @app.route('/api/state', methods=['GET'])
 def get_state():
     return jsonify(current_state)
-
-# WebSocket 事件
-@socketio.on('connect')
-def handle_connect():
-    emit('state_update', current_state)
-
-@socketio.on('led_control')
-def handle_led(data):
-    brightness = data.get('brightness', 0)
-    set_led_brightness(brightness)
-
-@socketio.on('servo_control')
-def handle_servo(data):
-    angle = data.get('angle', 0)
-    set_servo_angle(angle)
 
 # 清理
 @app.route('/api/shutdown', methods=['POST'])
@@ -244,10 +228,14 @@ def shutdown():
 
 if __name__ == '__main__':
     try:
+        print("=" * 50)
         print("啟動智慧家居控制器...")
-        print(f"LED：GPIO 18，伺服馬達：GPIO 12")
+        print(f"LED：GPIO 18")
+        print(f"伺服馬達：GPIO 12")
         print("規則引擎已就緒（Ollama 可選）")
-        socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+        print("=" * 50)
+        app.run(host='0.0.0.0', port=5000, debug=True)
     except KeyboardInterrupt:
+        print("\n正在關閉...")
         led.close()
         servo.close()
